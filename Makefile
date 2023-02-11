@@ -1,7 +1,9 @@
 # See LICENSE.txt for license details.
 
-CXX_FLAGS += -std=c++11 -O3 -Wall
-PAR_FLAG = -fopenmp
+# CXX_FLAGS += -std=c++11 -O3 -Wall -Iposix -I. -DFLAGS_STR=\""-O3 -DPERFORMANCE_RUN=1"\"  -Wl,--export=main  -DITERATIONS=0 -DPERFORMANCE_RUN=1  -Wl,--allow-undefined 
+CXX_FLAGS += -std=c++11 -O3 -Wall -s STANDALONE_WASM=1 -s INITIAL_MEMORY=1048576 -s TOTAL_STACK=32768 -s "EXPORTED_FUNCTIONS=['_main']" -s ERROR_ON_UNDEFINED_SYMBOLS=0
+# PAR_FLAG = -fopenmp
+PAR_FLAG = 
 
 ifneq (,$(findstring icpc,$(CXX)))
 	PAR_FLAG = -openmp
