@@ -40,10 +40,10 @@ pvector<ScoreT> PageRankPull(const Graph &g, int max_iters,
   pvector<ScoreT> outgoing_contrib(g.num_nodes());
   for (int iter=0; iter < max_iters; iter++) {
     double error = 0;
-    #pragma omp parallel for
+    #pragma omp parallel for num_threads(8)
     for (NodeID n=0; n < g.num_nodes(); n++)
       outgoing_contrib[n] = scores[n] / g.out_degree(n);
-    #pragma omp parallel for reduction(+ : error) schedule(dynamic, 16384)
+    #pragma omp parallel for reduction(+ : error) schedule(dynamic, 16384) num_threads(8)
     for (NodeID u=0; u < g.num_nodes(); u++) {
       ScoreT incoming_total = 0;
       for (NodeID v : g.in_neigh(u))

@@ -58,7 +58,7 @@ void PBFS(const Graph &g, NodeID source, pvector<CountT> &path_counts,
   depth_index.push_back(queue.begin());
   queue.slide_window();
   const NodeID* g_out_start = g.out_neigh(0).begin();
-  #pragma omp parallel
+  #pragma omp parallel num_threads(8)
   {
     NodeID depth = 0;
     QueueBuffer<NodeID> lqueue(queue);
@@ -118,7 +118,7 @@ pvector<ScoreT> Brandes(const Graph &g, SourcePicker<Graph> &sp,
     pvector<ScoreT> deltas(g.num_nodes(), 0);
     t.Start();
     for (int d=depth_index.size()-2; d >= 0; d--) {
-      #pragma omp parallel for schedule(dynamic, 64)
+      #pragma omp parallel for schedule(dynamic, 64) num_threads(8)
       for (auto it = depth_index[d]; it < depth_index[d+1]; it++) {
         NodeID u = *it;
         ScoreT delta_u = 0;
@@ -136,10 +136,10 @@ pvector<ScoreT> Brandes(const Graph &g, SourcePicker<Graph> &sp,
   }
   // normalize scores
   ScoreT biggest_score = 0;
-  #pragma omp parallel for reduction(max : biggest_score)
+  #pragma omp parallel for reduction(max : biggest_score) num_threads(8)
   for (NodeID n=0; n < g.num_nodes(); n++)
     biggest_score = max(biggest_score, scores[n]);
-  #pragma omp parallel for
+  #pragma omp parallel for num_threads(8)
   for (NodeID n=0; n < g.num_nodes(); n++)
     scores[n] = scores[n] / biggest_score;
   return scores;
