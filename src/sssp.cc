@@ -94,7 +94,7 @@ pvector<WeightT> DeltaStep(const WGraph &g, NodeID source, WeightT delta) {
   size_t frontier_tails[2] = {1, 0};
   frontier[0] = source;
   t.Start();
-  #pragma omp parallel
+  #pragma omp parallel num_threads(8)
   {
     vector<vector<NodeID> > local_bins(0);
     size_t iter = 0;

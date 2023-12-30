@@ -3,7 +3,6 @@ project(GAPBS LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 
 include_directories(src)
-
 add_executable(bc ${SOURCE_FILES} src/bc.cc)
 add_executable(bfs ${SOURCE_FILES} src/bfs.cc)
 add_executable(cc ${SOURCE_FILES} src/cc.cc)
@@ -13,4 +12,3 @@ add_executable(pr_spmv ${SOURCE_FILES} src/pr_spmv.cc)
 add_executable(pr ${SOURCE_FILES} src/pr.cc)
 add_executable(sssp ${SOURCE_FILES} src/sssp.cc)
 add_executable(tc ${SOURCE_FILES} src/tc.cc)
-set(CMAKE_CXX_FLAGS "-fno-exceptions -lstdc++")

@@ -47,7 +47,7 @@ int64_t BUStep(const Graph &g, pvector<NodeID> &parent, Bitmap &front,
                Bitmap &next) {
   int64_t awake_count = 0;
   next.reset();
-  #pragma omp parallel for reduction(+ : awake_count) schedule(dynamic, 1024)
+  #pragma omp parallel for reduction(+ : awake_count) schedule(dynamic, 1024) num_threads(8)
   for (NodeID u=0; u < g.num_nodes(); u++) {
     if (parent[u] < 0) {
       for (NodeID v : g.in_neigh(u)) {
@@ -67,7 +67,7 @@ int64_t BUStep(const Graph &g, pvector<NodeID> &parent, Bitmap &front,
 int64_t TDStep(const Graph &g, pvector<NodeID> &parent,
                SlidingQueue<NodeID> &queue) {
   int64_t scout_count = 0;
-  #pragma omp parallel
+  #pragma omp parallel num_threads(8)
   {
     QueueBuffer<NodeID> lqueue(queue);
     #pragma omp for reduction(+ : scout_count) nowait
@@ -90,7 +90,7 @@ int64_t TDStep(const Graph &g, pvector<NodeID> &parent,
 
 
 void QueueToBitmap(const SlidingQueue<NodeID> &queue, Bitmap &bm) {
-  #pragma omp parallel for
+  #pragma omp parallel for num_threads(8)
   for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
     NodeID u = *q_iter;
     bm.set_bit_atomic(u);
@@ -99,7 +99,7 @@ void QueueToBitmap(const SlidingQueue<NodeID> &queue, Bitmap &bm) {
 
 void BitmapToQueue(const Graph &g, const Bitmap &bm,
                    SlidingQueue<NodeID> &queue) {
-  #pragma omp parallel
+  #pragma omp parallel num_threads(8)
   {
     QueueBuffer<NodeID> lqueue(queue);
     #pragma omp for nowait
@@ -113,7 +113,7 @@ void BitmapToQueue(const Graph &g, const Bitmap &bm,
 
 pvector<NodeID> InitParent(const Graph &g) {
   pvector<NodeID> parent(g.num_nodes());
-  #pragma omp parallel for
+  #pragma omp parallel for num_threads(8)
   for (NodeID n=0; n < g.num_nodes(); n++)
     parent[n] = g.out_degree(n) != 0 ? -g.out_degree(n) : -1;
   return parent;
@@ -165,7 +165,7 @@ pvector<NodeID> DOBFS(const Graph &g, NodeID source, int alpha = 15,
       PrintStep("td", t.Seconds(), queue.size());
     }
   }
-  #pragma omp parallel for
+  #pragma omp parallel for num_threads(8)
   for (NodeID n = 0; n < g.num_nodes(); n++)
     if (parent[n] < -1)
       parent[n] = -1;

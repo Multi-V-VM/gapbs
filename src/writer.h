@@ -55,7 +55,7 @@ class WriterBase {
       neigh_bytes = edges_to_write * sizeof(SGID);
     else
       neigh_bytes = edges_to_write * sizeof(NodeWeight<NodeID_, SGID>);
-    out.write(reinterpret_cast<char*>(&directed), sizeof(bool));
+    out.write (reinterpret_cast<char*>(&directed), sizeof(bool));
     out.write(reinterpret_cast<char*>(&edges_to_write), sizeof(SGOffset));
     out.write(reinterpret_cast<char*>(&num_nodes), sizeof(SGOffset));
     pvector<SGOffset> offsets = g_.VertexOffsets(false);
