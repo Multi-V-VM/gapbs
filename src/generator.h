@@ -65,13 +65,12 @@ class Generator {
     EdgeList el(num_edges_);
     #pragma omp parallel
     {
-      std::mt19937 rng;
-      std::uniform_int_distribution<NodeID_> udist(0, num_nodes_-1);
+      // std::mt19937 rng;
+      // std::uniform_int_distribution<NodeID_> udist(0, num_nodes_-1);
       #pragma omp for
       for (int64_t block=0; block < num_edges_; block+=block_size) {
-        rng.seed(kRandSeed + block/block_size);
         for (int64_t e=block; e < std::min(block+block_size, num_edges_); e++) {
-          el[e] = Edge(udist(rng), udist(rng));
+          el[e] = Edge(1./(kRandSeed + block/block_size), 0.5/(kRandSeed + block/block_size));
         }
       }
     }
@@ -83,15 +82,14 @@ class Generator {
     EdgeList el(num_edges_);
     #pragma omp parallel
     {
-      std::mt19937 rng;
-      std::uniform_real_distribution<float> udist(0, 1.0f);
-      #pragma omp for
+      // std::mt19937 rng;
+      // std::uniform_real_distribution<float> udist(0, 1.0f);
       for (int64_t block=0; block < num_edges_; block+=block_size) {
-        rng.seed(kRandSeed + block/block_size);
+        // rng.seed(kRandSeed + block/block_size);
         for (int64_t e=block; e < std::min(block+block_size, num_edges_); e++) {
           NodeID_ src = 0, dst = 0;
           for (int depth=0; depth < scale_; depth++) {
-            float rand_point = udist(rng);
+            float rand_point = 1./(kRandSeed + block/block_size);
             src = src << 1;
             dst = dst << 1;
             if (rand_point < A+B) {
@@ -132,14 +130,14 @@ class Generator {
   static void InsertWeights(pvector<WEdge> &el) {
     #pragma omp parallel
     {
-      std::mt19937 rng;
-      std::uniform_int_distribution<int> udist(1, 255);
+      // std::mt19937 rng;
+      // std::uniform_int_distribution<int> udist(1, 255);
       int64_t el_size = el.size();
       #pragma omp for
       for (int64_t block=0; block < el_size; block+=block_size) {
-        rng.seed(kRandSeed + block/block_size);
+        // rng.seed(kRandSeed + block/block_size);
         for (int64_t e=block; e < std::min(block+block_size, el_size); e++) {
-          el[e].v.w = static_cast<WeightT_>(udist(rng));
+          el[e].v.w = static_cast<WeightT_>(1./(kRandSeed + block/block_size));
         }
       }
     }
