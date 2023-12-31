@@ -61,13 +61,13 @@ void PBFS(const Graph &g, NodeID source, pvector<CountT> &path_counts,
     const NodeID* g_out_start = g.out_neigh(0).begin();
 #pragma omp parallel num_threads(8)
     {
-        printf("Hello World... from thread = %d\n", omp_get_thread_num());
         NodeID depth = 0;
         QueueBuffer<NodeID> lqueue(queue);
         while (!queue.empty()) {
             depth++;
 #pragma omp for schedule(dynamic, 64) nowait
             for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
+              // printf("Hello World... from thread = %d\n", omp_get_thread_num());
                 NodeID u = *q_iter;
                 for (NodeID &v : g.out_neigh(u)) {
                     if ((depths[v] == -1) &&

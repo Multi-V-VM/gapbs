@@ -13,7 +13,7 @@
 #include "command_line.h"
 #include "graph.h"
 #include "pvector.h"
-#include "timer.h"
+#include "omp.h"
 
 
 /*
@@ -58,7 +58,7 @@ void Link(NodeID u, NodeID v, pvector<NodeID>& comp) {
 
 // Reduce depth of tree for each component to 1 by crawling up parents
 void Compress(const Graph &g, pvector<NodeID>& comp) {
-  #pragma omp parallel for schedule(dynamic, 16384) num_threads(8)
+  #pragma omp parallel for schedule(dynamic, 16384)
   for (NodeID n = 0; n < g.num_nodes(); n++) {
     while (comp[n] != comp[comp[n]]) {
       comp[n] = comp[comp[n]];
@@ -68,6 +68,7 @@ void Compress(const Graph &g, pvector<NodeID>& comp) {
 
 
 NodeID SampleFrequentElement(const pvector<NodeID>& comp,
+                             bool logging_enabled = false,
                              int64_t num_samples = 1024) {
   std::unordered_map<NodeID, int> sample_counts(32);
   using kvp_type = std::unordered_map<NodeID, int>::value_type;
@@ -83,26 +84,28 @@ NodeID SampleFrequentElement(const pvector<NodeID>& comp,
     sample_counts.begin(), sample_counts.end(),
     [](const kvp_type& a, const kvp_type& b) { return a.second < b.second; });
   float frac_of_graph = static_cast<float>(most_frequent->second) / num_samples;
-  std::cout
-    << "Skipping largest intermediate component (ID: " << most_frequent->first
-    << ", approx. " << static_cast<int>(frac_of_graph * 100)
-    << "% of the graph)" << std::endl;
+  if (logging_enabled)
+    std::cout
+      << "Skipping largest intermediate component (ID: " << most_frequent->first
+      << ", approx. " << static_cast<int>(frac_of_graph * 100)
+      << "% of the graph)" << std::endl;
   return most_frequent->first;
 }
 
 
-pvector<NodeID> Afforest(const Graph &g, int32_t neighbor_rounds = 2) {
+pvector<NodeID> Afforest(const Graph &g, bool logging_enabled = false,
+                         int32_t neighbor_rounds = 2) {
   pvector<NodeID> comp(g.num_nodes());
 
   // Initialize each node to a single-node self-pointing tree
-  #pragma omp parallel for num_threads(8)
+  #pragma omp parallel for
   for (NodeID n = 0; n < g.num_nodes(); n++)
     comp[n] = n;
 
   // Process a sparse sampled subgraph first for approximating components.
   // Sample by processing a fixed number of neighbors for each node (see paper)
   for (int r = 0; r < neighbor_rounds; ++r) {
-  #pragma omp parallel for schedule(dynamic,16384) num_threads(8)
+  #pragma omp parallel for schedule(dynamic,16384)
     for (NodeID u = 0; u < g.num_nodes(); u++) {
       for (NodeID v : g.out_neigh(u, r)) {
         // Link at most one time if neighbor available at offset r
@@ -115,11 +118,11 @@ pvector<NodeID> Afforest(const Graph &g, int32_t neighbor_rounds = 2) {
 
   // Sample 'comp' to find the most frequent element -- due to prior
   // compression, this value represents the largest intermediate component
-  NodeID c = SampleFrequentElement(comp);
+  NodeID c = SampleFrequentElement(comp, logging_enabled);
 
-  // Final 'link' phase over remaining edges (excluding largest component)
+  // Final 'link' phase over remaining edges (excluding the largest component)
   if (!g.directed()) {
-    #pragma omp parallel for schedule(dynamic, 16384) num_threads(8)
+    #pragma omp parallel for schedule(dynamic, 16384)
     for (NodeID u = 0; u < g.num_nodes(); u++) {
       // Skip processing nodes in the largest component
       if (comp[u] == c)
@@ -130,7 +133,7 @@ pvector<NodeID> Afforest(const Graph &g, int32_t neighbor_rounds = 2) {
       }
     }
   } else {
-    #pragma omp parallel for schedule(dynamic, 16384) num_threads(8)
+    #pragma omp parallel for schedule(dynamic, 16384)
     for (NodeID u = 0; u < g.num_nodes(); u++) {
       if (comp[u] == c)
         continue;
@@ -221,7 +224,7 @@ int main(int argc, char* argv[]) {
     return -1;
   Builder b(cli);
   Graph g = b.MakeGraph();
-  auto CCBound = [](const Graph& gr){ return Afforest(gr); };
+  auto CCBound = [&cli](const Graph& gr){ return Afforest(gr, cli.logging_en()); };
   BenchmarkKernel(cli, g, CCBound, PrintCompStats, CCVerifier);
   return 0;
 }

@@ -14,6 +14,7 @@
 #include "platform_atomics.h"
 #include "pvector.h"
 #include "timer.h"
+#include "omp.h"
 
 
 /*
@@ -29,7 +30,7 @@ delta parameter (-d) should be set for each input graph. This implementation
 incorporates a new bucket fusion optimization [2] that significantly reduces
 the number of iterations (& barriers) needed.
 
-The bins of width delta are actually all thread-local and of type std::vector
+The bins of width delta are actually all thread-local and of type std::vector,
 so they can grow but are otherwise capacity-proportional. Each iteration is
 done in two phases separated by barriers. In the first phase, the current
 shared bin is processed by all threads. As they find vertices whose distance
@@ -39,7 +40,7 @@ non-empty bin). In the next phase, each thread copies its selected
 thread-local bin into the shared bin.
 
 Once a vertex is added to a bin, it is not removed, even if its distance is
-later updated and it now appears in a lower bin. We find ignoring vertices if
+later updated and, it now appears in a lower bin. We find ignoring vertices if
 their distance is less than the min distance for the current bin removes
 enough redundant work to be faster than removing the vertex from older bins.
 
@@ -84,7 +85,8 @@ void RelaxEdges(const WGraph &g, NodeID u, WeightT delta,
   }
 }
 
-pvector<WeightT> DeltaStep(const WGraph &g, NodeID source, WeightT delta) {
+pvector<WeightT> DeltaStep(const WGraph &g, NodeID source, WeightT delta,
+                           bool logging_enabled = false) {
   Timer t;
   pvector<WeightT> dist(g.num_nodes(), kDistInf);
   dist[source] = 0;
@@ -128,7 +130,8 @@ pvector<WeightT> DeltaStep(const WGraph &g, NodeID source, WeightT delta) {
       #pragma omp single nowait
       {
         t.Stop();
-        PrintStep(curr_bin_index, t.Millisecs(), curr_frontier_tail);
+        if (logging_enabled)
+          PrintStep(curr_bin_index, t.Millisecs(), curr_frontier_tail);
         t.Start();
         curr_bin_index = kMaxBin;
         curr_frontier_tail = 0;
@@ -144,7 +147,8 @@ pvector<WeightT> DeltaStep(const WGraph &g, NodeID source, WeightT delta) {
       #pragma omp barrier
     }
     #pragma omp single
-    cout << "took " << iter << " iterations" << endl;
+    if (logging_enabled)
+      cout << "took " << iter << " iterations" << endl;
   }
   return dist;
 }
@@ -199,7 +203,7 @@ int main(int argc, char* argv[]) {
   WGraph g = b.MakeGraph();
   SourcePicker<WGraph> sp(g, cli.start_vertex());
   auto SSSPBound = [&sp, &cli] (const WGraph &g) {
-    return DeltaStep(g, sp.PickNext(), cli.delta());
+    return DeltaStep(g, sp.PickNext(), cli.delta(), cli.logging_en());
   };
   SourcePicker<WGraph> vsp(g, cli.start_vertex());
   auto VerifierBound = [&vsp] (const WGraph &g, const pvector<WeightT> &dist) {
