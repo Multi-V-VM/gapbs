@@ -14,7 +14,6 @@
 #include "platform_atomics.h"
 #include "pvector.h"
 #include "timer.h"
-#include "omp.h"
 
 
 /*
@@ -96,7 +95,7 @@ pvector<WeightT> DeltaStep(const WGraph &g, NodeID source, WeightT delta,
   size_t frontier_tails[2] = {1, 0};
   frontier[0] = source;
   t.Start();
-  #pragma omp parallel num_threads(8)
+  #pragma omp parallel
   {
     vector<vector<NodeID> > local_bins(0);
     size_t iter = 0;
@@ -105,7 +104,7 @@ pvector<WeightT> DeltaStep(const WGraph &g, NodeID source, WeightT delta,
       size_t &next_bin_index = shared_indexes[(iter+1)&1];
       size_t &curr_frontier_tail = frontier_tails[iter&1];
       size_t &next_frontier_tail = frontier_tails[(iter+1)&1];
-      #pragma omp for nowait schedule(dynamic, 64)
+      #pragma omp for 
       for (size_t i=0; i < curr_frontier_tail; i++) {
         NodeID u = frontier[i];
         if (dist[u] >= delta * static_cast<WeightT>(curr_bin_index))

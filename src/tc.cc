@@ -51,7 +51,7 @@ using namespace std;
 
 size_t OrderedCount(const Graph &g) {
   size_t total = 0;
-  #pragma omp parallel for reduction(+ : total) schedule(dynamic, 64) num_threads(8)
+  #pragma omp parallel for
   for (NodeID u=0; u < g.num_nodes(); u++) {
     for (NodeID v : g.out_neigh(u)) {
       if (v > u)

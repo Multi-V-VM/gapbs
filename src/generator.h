@@ -110,7 +110,7 @@ class Generator {
       UniDist<NodeID_, rng_t_> udist(num_nodes_-1, rng);
       #pragma omp for
       for (int64_t block=0; block < num_edges_; block+=block_size) {
-        // rng.seed(kRandSeed + block/block_size);
+        rng.seed(kRandSeed + block/block_size);
         for (int64_t e=block; e < std::min(block+block_size, num_edges_); e++) {
           el[e] = Edge(udist(), udist());
         }
@@ -128,7 +128,7 @@ class Generator {
       rng_t_ rng;
       #pragma omp for
       for (int64_t block=0; block < num_edges_; block+=block_size) {
-        // rng.seed(kRandSeed + block/block_size);
+        rng.seed(kRandSeed + block/block_size);
         for (int64_t e=block; e < std::min(block+block_size, num_edges_); e++) {
           NodeID_ src = 0, dst = 0;
           for (int depth=0; depth < scale_; depth++) {
@@ -178,7 +178,7 @@ class Generator {
       int64_t el_size = el.size();
       #pragma omp for
       for (int64_t block=0; block < el_size; block+=block_size) {
-        // rng.seed(kRandSeed + block/block_size);
+        rng.seed(kRandSeed + block/block_size);
         for (int64_t e=block; e < std::min(block+block_size, el_size); e++) {
           el[e].v.w = static_cast<WeightT_>(udist()+1);
         }

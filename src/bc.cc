@@ -15,8 +15,6 @@
 #include "sliding_queue.h"
 #include "timer.h"
 #include "util.h"
-#include "omp.h"
-
 
 /*
 GAP Benchmark Suite
@@ -26,7 +24,7 @@ Author: Scott Beamer
 Will return array of approx betweenness centrality scores for each vertex
 
 This BC implementation makes use of the Brandes [1] algorithm with
-implementation optimizations from Madduri et al. [2]. It is only an approximate
+implementation optimizations from Madduri et al. [2]. It is only approximate
 because it does not compute the paths from every start vertex, but only a small
 subset of them. Additionally, the scores are normalized to the range [0,1].
 
@@ -43,35 +41,30 @@ propagation phase.
     International Symposium on Parallel & Distributed Processing (IPDPS), 2009.
 */
 
-
 using namespace std;
 typedef float ScoreT;
 typedef double CountT;
 
-
-void PBFS(const Graph &g, NodeID source, pvector<CountT> &path_counts,
-          Bitmap &succ, vector<SlidingQueue<NodeID>::iterator> &depth_index,
-          SlidingQueue<NodeID> &queue) {
+void PBFS(const Graph &g, NodeID source, pvector<CountT> &path_counts, Bitmap &succ,
+          vector<SlidingQueue<NodeID>::iterator> &depth_index, SlidingQueue<NodeID> &queue) {
     pvector<NodeID> depths(g.num_nodes(), -1);
     depths[source] = 0;
     path_counts[source] = 1;
     queue.push_back(source);
     depth_index.push_back(queue.begin());
     queue.slide_window();
-    const NodeID* g_out_start = g.out_neigh(0).begin();
-#pragma omp parallel num_threads(8)
+    const NodeID *g_out_start = g.out_neigh(0).begin();
+#pragma omp parallel
     {
         NodeID depth = 0;
         QueueBuffer<NodeID> lqueue(queue);
         while (!queue.empty()) {
             depth++;
-#pragma omp for schedule(dynamic, 64) nowait
+#pragma omp for 
             for (auto q_iter = queue.begin(); q_iter < queue.end(); q_iter++) {
-              // printf("Hello World... from thread = %d\n", omp_get_thread_num());
                 NodeID u = *q_iter;
                 for (NodeID &v : g.out_neigh(u)) {
-                    if ((depths[v] == -1) &&
-                        (compare_and_swap(depths[v], static_cast<NodeID>(-1), depth))) {
+                    if ((depths[v] == -1) && (compare_and_swap(depths[v], static_cast<NodeID>(-1), depth))) {
                         lqueue.push_back(v);
                     }
                     if (depths[v] == depth) {
@@ -93,9 +86,7 @@ void PBFS(const Graph &g, NodeID source, pvector<CountT> &path_counts,
     depth_index.push_back(queue.begin());
 }
 
-
-pvector<ScoreT> Brandes(const Graph &g, SourcePicker<Graph> &sp,
-                        NodeID num_iters) {
+pvector<ScoreT> Brandes(const Graph &g, SourcePicker<Graph> &sp, NodeID num_iters, bool logging_enabled = false) {
     Timer t;
     t.Start();
     pvector<ScoreT> scores(g.num_nodes(), 0);
@@ -104,11 +95,13 @@ pvector<ScoreT> Brandes(const Graph &g, SourcePicker<Graph> &sp,
     vector<SlidingQueue<NodeID>::iterator> depth_index;
     SlidingQueue<NodeID> queue(g.num_nodes());
     t.Stop();
-    PrintStep("a", t.Seconds());
-    const NodeID* g_out_start = g.out_neigh(0).begin();
-    for (NodeID iter=0; iter < num_iters; iter++) {
+    if (logging_enabled)
+        PrintStep("a", t.Seconds());
+    const NodeID *g_out_start = g.out_neigh(0).begin();
+    for (NodeID iter = 0; iter < num_iters; iter++) {
         NodeID source = sp.PickNext();
-        cout << "source: " << source << endl;
+        if (logging_enabled)
+            PrintStep("Source", static_cast<int64_t>(source));
         t.Start();
         path_counts.fill(0);
         depth_index.resize(0);
@@ -116,12 +109,13 @@ pvector<ScoreT> Brandes(const Graph &g, SourcePicker<Graph> &sp,
         succ.reset();
         PBFS(g, source, path_counts, succ, depth_index, queue);
         t.Stop();
-        PrintStep("b", t.Seconds());
+        if (logging_enabled)
+            PrintStep("b", t.Seconds());
         pvector<ScoreT> deltas(g.num_nodes(), 0);
         t.Start();
-        for (int d=depth_index.size()-2; d >= 0; d--) {
-#pragma omp parallel for num_threads(8)
-            for (auto it = depth_index[d]; it < depth_index[d+1]; it++) {
+        for (int d = depth_index.size() - 2; d >= 0; d--) {
+#pragma omp parallel for 
+            for (auto it = depth_index[d]; it < depth_index[d + 1]; it++) {
                 NodeID u = *it;
                 ScoreT delta_u = 0;
                 for (NodeID &v : g.out_neigh(u)) {
@@ -134,19 +128,19 @@ pvector<ScoreT> Brandes(const Graph &g, SourcePicker<Graph> &sp,
             }
         }
         t.Stop();
-        PrintStep("p", t.Seconds());
+        if (logging_enabled)
+            PrintStep("p", t.Seconds());
     }
     // normalize scores
     ScoreT biggest_score = 0;
 #pragma omp parallel for reduction(max : biggest_score)
-    for (NodeID n=0; n < g.num_nodes(); n++)
+    for (NodeID n = 0; n < g.num_nodes(); n++)
         biggest_score = max(biggest_score, scores[n]);
-#pragma omp parallel for num_threads(8)
-    for (NodeID n=0; n < g.num_nodes(); n++)
+#pragma omp parallel for
+    for (NodeID n = 0; n < g.num_nodes(); n++)
         scores[n] = scores[n] / biggest_score;
     return scores;
 }
-
 
 void PrintTopScores(const Graph &g, const pvector<ScoreT> &scores) {
     vector<pair<NodeID, ScoreT>> score_pairs(g.num_nodes());
@@ -158,16 +152,14 @@ void PrintTopScores(const Graph &g, const pvector<ScoreT> &scores) {
         cout << kvp.second << ":" << kvp.first << endl;
 }
 
-
 // Still uses Brandes algorithm, but has the following differences:
 // - serial (no need for atomics or dynamic scheduling)
 // - uses vector for BFS queue
 // - regenerates farthest to closest traversal order from depths
 // - regenerates successors from depths
-bool BCVerifier(const Graph &g, SourcePicker<Graph> &sp, NodeID num_iters,
-                const pvector<ScoreT> &scores_to_test) {
+bool BCVerifier(const Graph &g, SourcePicker<Graph> &sp, NodeID num_iters, const pvector<ScoreT> &scores_to_test) {
     pvector<ScoreT> scores(g.num_nodes(), 0);
-    for (int iter=0; iter < num_iters; iter++) {
+    for (int iter = 0; iter < num_iters; iter++) {
         NodeID source = sp.PickNext();
         // BFS phase, only records depth & path_counts
         pvector<int> depths(g.num_nodes(), -1);
@@ -197,9 +189,9 @@ bool BCVerifier(const Graph &g, SourcePicker<Graph> &sp, NodeID num_iters,
                 verts_at_depth[depths[n]].push_back(n);
             }
         }
-        // Going from farthest to clostest, compute "depencies" (deltas)
+        // Going from farthest to closest, compute "dependencies" (deltas)
         pvector<ScoreT> deltas(g.num_nodes(), 0);
-        for (int depth=verts_at_depth.size()-1; depth >= 0; depth--) {
+        for (int depth = verts_at_depth.size() - 1; depth >= 0; depth--) {
             for (NodeID u : verts_at_depth[depth]) {
                 for (NodeID v : g.out_neigh(u)) {
                     if (depths[v] == depths[u] + 1) {
@@ -227,8 +219,7 @@ bool BCVerifier(const Graph &g, SourcePicker<Graph> &sp, NodeID num_iters,
     return all_ok;
 }
 
-
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     CLIterApp cli(argc, argv, "betweenness-centrality", 1);
     if (!cli.ParseArgs())
         return -1;
@@ -237,13 +228,12 @@ int main(int argc, char* argv[]) {
     Builder b(cli);
     Graph g = b.MakeGraph();
     SourcePicker<Graph> sp(g, cli.start_vertex());
-    auto BCBound =
-        [&sp, &cli] (const Graph &g) { return Brandes(g, sp, cli.num_iters()); };
+    auto BCBound = [&sp, &cli](const Graph &g) { return Brandes(g, sp, cli.num_iters(), cli.logging_en()); };
     SourcePicker<Graph> vsp(g, cli.start_vertex());
-    auto VerifierBound = [&vsp, &cli] (const Graph &g,
-                                      const pvector<ScoreT> &scores) {
+    auto VerifierBound = [&vsp, &cli](const Graph &g, const pvector<ScoreT> &scores) {
         return BCVerifier(g, vsp, cli.num_iters(), scores);
     };
     BenchmarkKernel(cli, g, BCBound, PrintTopScores, VerifierBound);
+    // __wasilibc_nocwd_openat_nomode(1,"/dev/stdout",0);
     return 0;
 }
